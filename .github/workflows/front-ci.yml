@@ -1,0 +1,88 @@
+name: Build & Deploy (front)
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'angular.json'
+      - 'package*.json'
+      - 'dockerfile'
+      - 'nginx.conf'
+      - 'helm/front/**'
+      - '.github/workflows/front-ci.yml'
+  workflow_dispatch:
+
+# Make jobs cancel if a new push comes in
+concurrency:
+  group: front-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Image + chart info
+  IMAGE_REPO: alasuidi01/quiz-ui          # change if you want a different repo
+  CHART_DIR: helm/front/front                   # path to your front Helm chart inside the repo
+  RELEASE: quiz-ui                        # Helm release name
+  NAMESPACE: default                      # k8s namespace
+  APP_NAME: fronttest                     # Angular project name under dist/
+  KUBECONFIG: /root/.kube/config          # kubeconfig path on your self-hosted runner
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-deploy:
+    # your runner has the default labels: self-hosted, Linux, X64
+    runs-on: [self-hosted, Linux, X64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Optional: confirm tools present (helps debugging)
+      - name: Show tool versions
+        run: |
+          docker --version
+          helm version
+          kubectl version --client=true
+
+      - name: Docker login (Docker Hub)
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Build via your Dockerfile (multi-stage Node -> Nginx) and push
+      - name: Build & push image
+        run: |
+          TAG=${GITHUB_SHA::7}
+          docker build \
+            --build-arg APP_NAME=${APP_NAME} \
+            -t ${IMAGE_REPO}:${TAG} \
+            -t ${IMAGE_REPO}:latest \
+            .
+          docker push ${IMAGE_REPO}:${TAG}
+          docker push ${IMAGE_REPO}:latest
+          echo "TAG=${TAG}" >> $GITHUB_ENV
+
+      # Deploy/upgrade with Helm
+      - name: Helm upgrade/install
+        run: |
+          # sanity: kubectl access
+          kubectl get ns
+
+          # install/upgrade release
+          helm upgrade --install ${RELEASE} ${CHART_DIR} \
+            --namespace ${NAMESPACE} \
+            --create-namespace \
+            --set image.repository=${IMAGE_REPO} \
+            --set image.tag=${{ env.TAG }} \
+            --wait --timeout 5m
+
+      # Optional: quick smoke check (adjust to your service/ingress)
+      - name: Show front pods & service
+        run: |
+          kubectl get pods -n ${NAMESPACE} -l app=${RELEASE} -o wide
+          kubectl get svc -n ${NAMESPACE}
+          kubectl get ingress -n ${NAMESPACE} || true
