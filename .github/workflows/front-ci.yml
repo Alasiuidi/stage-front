@@ -21,8 +21,8 @@ concurrency:
 env:
   # Image + chart info
   IMAGE_REPO: alasuidi01/quiz-ui          # change if you want a different repo
-  CHART_DIR: helm/front/front             # path to your front Helm chart inside the repo
-  RELEASE: quiz-ui                        # Helm release name
+  CHART_DIR: /home/root/helm/front/front             # path to your front Helm chart inside the repo
+  RELEASE: front                        # Helm release name
   NAMESPACE: default                      # k8s namespace
   APP_NAME: fronttest                     # Angular project name under dist/
   KUBECONFIG: /root/.kube/config          # kubeconfig path on your self-hosted runner
