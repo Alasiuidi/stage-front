@@ -13,19 +13,17 @@ on:
       - '.github/workflows/front-ci.yml'
   workflow_dispatch:
 
-# Make jobs cancel if a new push comes in
 concurrency:
   group: front-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  # Image + chart info
-  IMAGE_REPO: alasuidi01/front2          # change if you want a different repo
-  CHART_DIR: /home/root/helm/front/front             # path to your front Helm chart inside the repo
-  RELEASE: front                        # Helm release name
-  NAMESPACE: default                      # k8s namespace
-  APP_NAME: fronttest                     # Angular project name under dist/
-  KUBECONFIG: /root/.kube/config          # kubeconfig path on your self-hosted runner
+  IMAGE_REPO: alasuidi01/front2          
+  CHART_DIR: /home/root/helm/front/front             
+  RELEASE: front                        
+  NAMESPACE: default                      
+  APP_NAME: fronttest                     
+  KUBECONFIG: /root/.kube/config          
 
 permissions:
   contents: read
@@ -33,14 +31,12 @@ permissions:
 
 jobs:
   build-and-deploy:
-    # your runner has the default labels: self-hosted, Linux, X64
     runs-on: [self-hosted, Linux, X64]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Optional: confirm tools present (helps debugging)
       - name: Show tool versions
         run: |
           docker --version
@@ -55,7 +51,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Build via your Dockerfile (multi-stage Node -> Nginx) and push
       - name: Build & push image
         run: |
           TAG=${GITHUB_SHA::7}
@@ -68,7 +63,6 @@ jobs:
           docker push ${IMAGE_REPO}:latest
           echo "TAG=${TAG}" >> $GITHUB_ENV
 
-      # Deploy/upgrade with Helm (via MicroK8s)
       - name: Helm upgrade/install
         run: |
           # sanity: kubectl access
@@ -82,7 +76,6 @@ jobs:
             --set image.tag=${{ env.TAG }} \
             --wait --timeout 5m
 
-      # Optional: quick smoke check (adjust to your service/ingress)
       - name: Show front pods & service
         run: |
           microk8s kubectl get pods -n ${NAMESPACE} -l app=${RELEASE} -o wide
